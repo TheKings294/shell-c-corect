@@ -86,12 +86,10 @@ do
     result=$("./$fileName" $i)
     if [[ $(facto $i) -ne $result ]]; then
         set_note $note
-        exit 1
     fi
 done
 
 note=$((note + 5))
-echo "7 ? $note"
 
 result=$("./$fileName" 0)
 if [[ $result -eq 1 ]]; then 
@@ -99,17 +97,13 @@ if [[ $result -eq 1 ]]; then
 fi
 
 result=$("$fileName")
-if [[ $result != "${error_message_special_case[0]}" ]]; then
-    set_note $note
-    exit 1
+if [[ $result == "${error_message_special_case[0]}" ]]; then
+    note=$((note + 4))
 fi
-note=$((note + 4))
 result=$("$fileName" -1)
-if [[ $result != "${error_message_special_case[1]}" ]]; then
-    set_note $note
-    exit 1
+if [[ $result == "${error_message_special_case[1]}" ]]; then
+    note=$((note + 4))
 fi
-note=$((note + 4))
 
 file_main_c=$(find . -type f -name main.c)
 
@@ -173,14 +167,17 @@ if [ "$is_line_over_80" = true ]; then
 fi
 
 if [[ $(grep -E '^\s*int\s+factorielle\s*\(\s*int\s+number\s*\)' $file_main_c) ]]; then 
-  echo "zebb"
-   note=$((note + 2))
+  note=$((note + 2))
 fi
 
 make clean
 
-exec=$(find . -type f ! -path "*.sh" -exec test -x {} \; -print | wc -l)
-[ "$exec" -eq 0 ] && echo "Executable suprimé" || (echo "Erreur lors de la supression"; status=1;)
+if [[ $(find . -type f ! -path "*.sh" -exec test -x {} \; -print | wc -l) -eq 0 ]]; then
+  echo "Executable suprimé"
+else
+  echo "Erreur lors de la supression"
+  status=1
+fi
 
 if [ "$status" -ne 0 ]; then 
     note=$((note - 2))
