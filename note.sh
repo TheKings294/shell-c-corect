@@ -31,6 +31,26 @@ set_note() {
     echo "La note de l'eleve est : $note"
 }
 
+indentation() {
+  local line_on="$1"
+  local space_needed="$2"
+  local spaces=0
+
+  for (( i=0; i<${#line_on}; i++ )); do
+    if [ "${line_on:$i:1}" = " " ]; then
+      ((spaces++))
+    else
+      break
+    fi
+  done
+
+  if [ "$spaces" -ne "$space_needed" ]; then
+    echo 1
+  else
+    echo 0
+  fi
+}
+
 status=0
 error_message_special_case=("Erreur: Mauvais nombre de parametres" "Erreur: nombre negatif")
 note=0
@@ -40,11 +60,17 @@ files=$(find . -type f \( -name "*.c" -o -name "*.h" -o -name "Makefile" -o -ina
 
 make all
 
-exec=$(find . -type f ! -path "*.sh" -exec test -x {} \; -print | wc -l)
-[ "$exec" -eq 1 ] && echo "Code compilé !" || (echo "Erreur lors de la compilation"; status=1;)
+
+if [[ $(find . -type f ! -path "*.sh" -exec test -x {} \; -print | wc -l) -eq 1 ]]; then
+  echo "Code compilé !"
+else
+  echo "Erreur lors de la compilation"
+  status=1
+fi
 
 if [ "$status" -ne 0 ]; then 
     echo "$note"
+    set_note $note
     exit 1
 fi 
 
@@ -80,6 +106,76 @@ if [[ $result != "${error_message_special_case[1]}" ]]; then
     exit 1
 fi
 note=$((note + 4))
+
+file_main_c=$(find . -type f -name main.c)
+
+nb_space=0
+is_line_over_80=false
+is_indentation_incorrect=false
+in_comment_block=false
+
+while IFS= read -r line || [ -n "$line" ]; do
+  nb_chars=${#line}
+
+  if [[ "$line" =~ ^[[:space:]]*/\* ]]; then
+    in_comment_block=true
+  fi
+
+  if $in_comment_block; then
+    if [[ "$line" =~ \*/ ]]; then
+      in_comment_block=false
+    fi
+    ((ligne_num++))
+    continue
+  fi
+
+  if [ "$nb_chars" -gt 80 ]; then
+    is_line_over_80=true
+  fi
+
+  if [[ "$line" =~ ^[[:space:]]*// ]]; then
+    ((ligne_num++))
+    continue
+  fi
+
+  for (( i=0; i<nb_chars; i++ )); do
+    char="${line:$i:1}"
+    if [ "$char" = "{" ]; then
+      if [ "$(indentation "$line" "$nb_space")" -eq 1 ]; then
+        is_indentation_incorrect=true
+      fi
+      ((nb_space+=2))
+    elif [ "$char" = "}" ]; then
+      ((nb_space-=2))
+      if [ "$(indentation "$line" "$nb_space")" -eq 1 ]; then
+        is_indentation_incorrect=true
+      fi
+    fi
+  done
+
+  if [[ "$line" =~ [a-zA-Z0-9] ]]; then
+    if [ "$(indentation "$line" "$nb_space")" -eq 1 ]; then
+      is_indentation_incorrect=true
+    fi
+  fi
+
+  ((ligne_num++))
+
+done < "$file_main_c"
+
+if [ "$is_indentation_incorrect" = true ]; then
+  echo "indentation : $is_indentation_incorrect"
+  note=$((note - 2))
+fi
+
+if [ "$is_line_over_80" = true ]; then
+  echo "line over 80 : $is_line_over_80"
+  note=$((note - 2))
+fi
+
+if [[ $(grep -E '^\s*int\s+factorielle\s*\(\s*int\s+number\s*\)' $file_main_c) ]]; then 
+   note=$((note + 2))
+fi
 
 make clean
 
