@@ -81,4 +81,13 @@ if [[ $result != "${error_message_special_case[1]}" ]]; then
 fi
 note=$((note + 4))
 
+make clean
+
+exec=$(find . -type f ! -path "*.sh" -exec test -x {} \; -print | wc -l)
+[ "$exec" -eq 0 ] && echo "Executable suprimé" || (echo "Erreur lors de la supression"; status=1;)
+
+if [ "$status" -ne 0 ]; then 
+    note=$((note - 2))
+fi 
+
 set_note $note
