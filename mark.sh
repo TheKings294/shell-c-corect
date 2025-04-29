@@ -31,6 +31,58 @@ set_note() {
     echo "La note de l'eleve est : $note"
 }
 
+verification() {
+  file=$1
+  while IFS= read -r line || [ -n "$line" ]; do
+    nb_chars=${#line}
+
+    if [[ "$line" =~ ^[[:space:]]*/\* ]]; then
+      in_comment_block=true
+    fi
+
+    if $in_comment_block; then
+      if [[ "$line" =~ \*/ ]]; then
+        in_comment_block=false
+      fi
+      ((ligne_num++))
+      continue
+    fi
+
+    if [ "$nb_chars" -gt 80 ]; then
+      is_line_over_80=true
+    fi
+
+    if [[ "$line" =~ ^[[:space:]]*// ]]; then
+      ((ligne_num++))
+      continue
+    fi
+
+    for (( i=0; i<nb_chars; i++ )); do
+      char="${line:$i:1}"
+      if [ "$char" = "{" ]; then
+        if [ "$(indentation "$line" "$nb_space")" -eq 1 ]; then
+    is_indentation_incorrect=true
+        fi
+        ((nb_space+=2))
+      elif [ "$char" = "}" ]; then
+        ((nb_space-=2))
+        if [ "$(indentation "$line" "$nb_space")" -eq 1 ]; then
+    is_indentation_incorrect=true
+        fi
+      fi
+    done
+
+    if [[ "$line" =~ [a-zA-Z0-9] ]]; then
+      if [ "$(indentation "$line" "$nb_space")" -eq 1 ]; then
+        is_indentation_incorrect=true
+      fi
+    fi
+
+    ((ligne_num++))
+
+  done < "$file"
+}
+
 indentation() {
   local line_on="$1"
   local space_needed="$2"
@@ -72,112 +124,66 @@ else
   status=1
 fi
 
-if [ "$status" -ne 0 ]; then 
+if [ "$status" -ne 0 ]; then
     set_note $note
     exit 1
-fi 
+fi
 
 note=$((note + 2))
 
 fileName=$(find . -type f ! -path "*.sh" -exec test -x {} \; -print)
 
-for ((i=0; i<10; i++));   
+for ((i=0; i<10; i++));
 do
     result=$("./$fileName" $i)
     if [[ $(facto $i) -ne $result ]]; then
         set_note $note
+        exit 1
     fi
 done
 
 note=$((note + 5))
 
 result=$("./$fileName" 0)
-if [[ $result -eq 1 ]]; then 
+if [[ $result -eq 1 ]]; then
     note=$((note + 3))
 fi
 
 result=$("$fileName")
-if [[ $result == "${error_message_special_case[0]}" ]]; then
-    note=$((note + 4))
+if [[ $result != "${error_message_special_case[0]}" ]]; then
+    set_note $note
+    exit 1
 fi
+note=$((note + 4))
 result=$("$fileName" -1)
-if [[ $result == "${error_message_special_case[1]}" ]]; then
-    note=$((note + 4))
+if [[ $result != "${error_message_special_case[1]}" ]]; then
+    set_note $note
+    exit 1
 fi
+note=$((note + 4))
 
 file_main_c=$(find . -type f -name main.c)
 
-while IFS= read -r line || [ -n "$line" ]; do
-  nb_chars=${#line}
-
-  if [[ "$line" =~ ^[[:space:]]*/\* ]]; then
-    in_comment_block=true
-  fi
-
-  if $in_comment_block; then
-    if [[ "$line" =~ \*/ ]]; then
-      in_comment_block=false
-    fi
-    ((ligne_num++))
-    continue
-  fi
-
-  if [ "$nb_chars" -gt 80 ]; then
-    is_line_over_80=true
-  fi
-
-  if [[ "$line" =~ ^[[:space:]]*// ]]; then
-    ((ligne_num++))
-    continue
-  fi
-
-  for (( i=0; i<nb_chars; i++ )); do
-    char="${line:$i:1}"
-    if [ "$char" = "{" ]; then
-      if [ "$(indentation "$line" "$nb_space")" -eq 1 ]; then
-        is_indentation_incorrect=true
-      fi
-      ((nb_space+=2))
-    elif [ "$char" = "}" ]; then
-      ((nb_space-=2))
-      if [ "$(indentation "$line" "$nb_space")" -eq 1 ]; then
-        is_indentation_incorrect=true
-      fi
-    fi
-  done
-
-  if [[ "$line" =~ [a-zA-Z0-9] ]]; then
-    if [ "$(indentation "$line" "$nb_space")" -eq 1 ]; then
-      is_indentation_incorrect=true
-    fi
-  fi
-
-  ((ligne_num++))
-
-done < "$file_main_c"
+file_header_h=$(find . -type f -name header.h)
 
 if [ "$is_indentation_incorrect" = true ]; then
-  echo "zebi :$is_indentation_incorrect"
+
   note=$((note - 2))
 fi
 
 if [ "$is_line_over_80" = true ]; then
-  echo "zeba: $is_line_over_80"
+
   note=$((note - 2))
 fi
 
-if [[ $(grep -E '^\s*int\s+factorielle\s*\(\s*int\s+number\s*\)' $file_main_c) ]]; then 
-  note=$((note + 2))
+if [[ $(grep -E '^\s*int\s+factorielle\s*\(\s*int\s+number\s*\)' $file_header_h) ]]; then 
+   note=$((note + 2))
 fi
 
 make clean
 
-if [[ $(find . -type f ! -path "*.sh" -exec test -x {} \; -print | wc -l) -eq 0 ]]; then
-  echo "Executable suprimé"
-else
-  echo "Erreur lors de la supression"
-  status=1
-fi
+exec=$(find . -type f ! -path "*.sh" -exec test -x {} \; -print | wc -l)
+[ "$exec" -eq 0 ] && echo "Executable suprimé" || (echo "Erreur lors de la supression"; status=1;)
 
 if [ "$status" -ne 0 ]; then 
     note=$((note - 2))
