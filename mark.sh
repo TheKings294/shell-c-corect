@@ -166,6 +166,10 @@ file_main_c=$(find . -type f -name main.c)
 
 file_header_h=$(find . -type f -name header.h)
 
+verification $file_main_c
+
+verification $file_header_h
+
 if [ "$is_indentation_incorrect" = true ]; then
 
   note=$((note - 2))
